@@ -44,15 +44,22 @@ class Document(Base):
         default="uploaded",
     )
 
+    document_type: Mapped[str] = mapped_column(
+        String(50),
+        default="general",
+        nullable=False,
+    )
+
     upload_time: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
     )
 
     chunks: Mapped[list["DocumentChunk"]] = relationship(
-    back_populates="document",
-    cascade="all, delete-orphan",
+        back_populates="document",
+        cascade="all, delete-orphan",
     )
+
 
 class DocumentChunk(Base):
     """

@@ -19,6 +19,7 @@ class RAGPipeline:
     def index_document(
         self,
         file_path: str,
+        document_id: int,
     ):
 
         # Extract pages
@@ -32,14 +33,15 @@ class RAGPipeline:
             [chunk["text"] for chunk in chunks]
         )
 
-        # Store vectors
+        # Store vectors, scoped to this document
         self.vector_store.add(
+            document_id,
             embeddings,
             chunks,
         )
 
         app_logger.info(
-            f"{len(chunks)} chunks indexed."
+            f"{len(chunks)} chunks indexed for document_id={document_id}."
         )
 
         return chunks

@@ -3,6 +3,7 @@ from time import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.init_db import init_db
+from app.database.session import SessionLocal
 from app.api.routes.documents import router as document_router
 
 from app.core.config import settings
@@ -10,6 +11,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logger import app_logger
 from app.api.routes.chat import router as chat_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.rag.index_loader import restore_vector_store
 
 
 app = FastAPI(
@@ -60,6 +62,15 @@ async def log_requests(request: Request, call_next):
 async def startup_event():
     init_db()
     app_logger.info("Database initialized successfully.")
+
+    # Rebuild the in-memory FAISS vector store from whatever was
+    # already indexed and persisted to disk/DB in a previous run, so
+    # previously uploaded documents remain queryable after a restart.
+    db = SessionLocal()
+    try:
+        restore_vector_store(db)
+    finally:
+        db.close()
 
 @app.get("/")
 async def root():

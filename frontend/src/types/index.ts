@@ -1,3 +1,5 @@
+export type DocumentType = "study" | "general" | "empty";
+
 export interface Source {
   documentName: string;
   page: number;
@@ -10,7 +12,18 @@ export interface Document {
   filename: string;
   fileSize: string;
   uploadedAt: string;
-  status: "uploading" | "processing" | "indexed" | "failed";
+
+  status:
+    | "uploading"
+    | "processing"
+    | "uploaded"
+    | "indexed"
+    | "failed";
+
+  documentType: DocumentType;
+
+  totalPages: number;
+
   progress?: number;
 }
 

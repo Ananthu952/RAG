@@ -4,7 +4,16 @@ from app.rag.vector_store import VectorStore
 
 class Retriever:
     """
-    Handles semantic retrieval from the vector store.
+    Handles retrieval from the vector store.
+
+    Two retrieval modes are supported:
+
+    1. Semantic retrieval:
+       Used for normal user questions.
+
+    2. Document retrieval:
+       Used for document-level operations such as
+       explain and summarize.
     """
 
     def __init__(self, vector_store: VectorStore):
@@ -14,17 +23,43 @@ class Retriever:
     def retrieve(
         self,
         question: str,
+        document_id: int | None = None,
         top_k: int = 5,
-    ):
+    ) -> list[dict]:
         """
         Retrieve the most relevant chunks for a question.
+
+        If document_id is provided, retrieval is restricted
+        to that document.
         """
 
-        question_embedding = self.embedding_service.encode([question])
+        question_embedding = self.embedding_service.encode(
+            [question]
+        )
 
-        results = self.vector_store.search(
+        return self.vector_store.search(
             question_embedding,
+            document_id=document_id,
             top_k=top_k,
         )
 
-        return results
+    def retrieve_document(
+        self,
+        document_id: int,
+    ) -> list[dict]:
+        """
+        Retrieve all indexed chunks belonging to a document.
+
+        Unlike semantic retrieval, this does not perform an
+        embedding search. It returns the complete indexed
+        document context.
+
+        Used for document-level operations such as:
+
+        - Explain
+        - Summarize
+        """
+
+        return self.vector_store.get_document_chunks(
+            document_id
+        )

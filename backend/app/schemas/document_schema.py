@@ -10,9 +10,12 @@ class DocumentResponse(BaseModel):
     total_pages: int
     file_size: int
     status: str
+    document_type: str
     upload_time: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True
+    )
 
 
 class UploadResponse(BaseModel):

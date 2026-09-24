@@ -6,9 +6,11 @@ class PDFService:
     @staticmethod
     def get_page_count(file_path: str) -> int:
         pdf = fitz.open(file_path)
-        pages = pdf.page_count
-        pdf.close()
-        return pages
+
+        try:
+            return pdf.page_count
+        finally:
+            pdf.close()
 
     @staticmethod
     def extract_text(file_path: str) -> list[dict]:
@@ -26,16 +28,21 @@ class PDFService:
 
         pdf = fitz.open(file_path)
 
-        pages = []
+        try:
+            pages = []
 
-        for page_number, page in enumerate(pdf, start=1):
-            pages.append(
-                {
-                    "page": page_number,
-                    "text": page.get_text("text"),
-                }
-            )
+            for page_number, page in enumerate(
+                pdf,
+                start=1,
+            ):
+                pages.append(
+                    {
+                        "page": page_number,
+                        "text": page.get_text("text"),
+                    }
+                )
 
-        pdf.close()
+            return pages
 
-        return pages
+        finally:
+            pdf.close()

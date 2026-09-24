@@ -1,8 +1,11 @@
 import React, { useRef } from "react";
 import { Paperclip, Mic, ArrowRight } from "lucide-react";
+
 import { uploadDocument } from "../../services/documentService";
 import type { Document } from "../../types";
+
 import DocumentCard from "../upload/DocumentCard";
+import type { DocumentTopic } from "../upload/DocumentCard";
 
 interface PromptInputProps {
   prompt: string;
@@ -13,6 +16,14 @@ interface PromptInputProps {
   setUploadedDocument: React.Dispatch<
     React.SetStateAction<Document | null>
   >;
+
+  onExplain: () => void;
+  onSummarize: () => void;
+
+  isTyping: boolean;
+
+  topics: DocumentTopic[];
+  topicsLoading: boolean;
 }
 
 export default function PromptInput({
@@ -21,8 +32,14 @@ export default function PromptInput({
   onSend,
   uploadedDocument,
   setUploadedDocument,
+  onExplain,
+  onSummarize,
+  isTyping,
+  topics,
+  topicsLoading,
 }: PromptInputProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef =
+    useRef<HTMLInputElement>(null);
 
   const handleUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -31,20 +48,28 @@ export default function PromptInput({
 
     if (!file) return;
 
-    try {
-      await uploadDocument(file);
+    if (
+      file.type !== "application/pdf" &&
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      alert("Please select a PDF file.");
+      e.target.value = "";
+      return;
+    }
 
-      setUploadedDocument({
-        id: Date.now().toString(),
-        title: file.name,
-        filename: file.name,
-        fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-        uploadedAt: new Date().toISOString(),
-        status: "indexed",
-      });
+    try {
+      const document = await uploadDocument(file);
+
+      setUploadedDocument(document);
     } catch (error) {
-      console.error(error);
-      alert("❌ Upload failed.");
+      console.error(
+        "Document upload failed:",
+        error
+      );
+
+      alert(
+        "❌ Upload failed. Please try again."
+      );
     }
 
     e.target.value = "";
@@ -52,67 +77,100 @@ export default function PromptInput({
 
   return (
     <div className="w-full max-w-4xl mx-auto px-6 pb-8">
-
-      {/* Uploaded Document Preview */}
+      {/* Uploaded document */}
       {uploadedDocument && (
         <div className="mb-4">
           <DocumentCard
             document={uploadedDocument}
-            onRemove={() => setUploadedDocument(null)}
+            onRemove={() =>
+              setUploadedDocument(null)
+            }
+            onExplain={onExplain}
+            onSummarize={onSummarize}
+            topics={topics}
+            topicsLoading={topicsLoading}
           />
         </div>
       )}
 
-      {/* Input Box */}
+      {/* Prompt input */}
       <div className="relative bg-[#181818] border border-[#2a2a2a] rounded-xl p-2 flex items-center gap-3 shadow-2xl">
-
-        {/* Hidden File Input */}
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf"
+          accept="application/pdf,.pdf"
           hidden
           onChange={handleUpload}
         />
 
-        {/* Upload Button */}
+        {/* Upload */}
         <button
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2.5 bg-[#00E5FF] hover:bg-[#33ECFF] text-black rounded-lg transition-colors"
+          type="button"
+          onClick={() =>
+            fileInputRef.current?.click()
+          }
+          disabled={isTyping}
+          className="p-2.5 bg-[#00E5FF] hover:bg-[#33ECFF] disabled:opacity-40 disabled:cursor-not-allowed text-black rounded-lg transition-colors"
+          aria-label="Upload PDF"
+          title="Upload PDF"
         >
           <Paperclip className="w-4 h-4" />
         </button>
 
-        {/* Chat Input */}
+        {/* Text input */}
         <input
           type="text"
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) =>
+            setPrompt(e.target.value)
+          }
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey
+            ) {
+              e.preventDefault();
               onSend();
             }
           }}
-          placeholder="Ask Aureum about your documents..."
-          className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
+          placeholder={
+            uploadedDocument
+              ? "Ask anything about this document..."
+              : "Ask Aureum about your documents..."
+          }
+          disabled={isTyping}
+          className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
         />
 
-        {/* Microphone */}
-        <button className="p-2 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-[#242424] transition-colors">
+        {/* Voice */}
+        <button
+          type="button"
+          disabled
+          className="p-2 text-slate-500 rounded-lg cursor-not-allowed"
+          aria-label="Voice input"
+          title="Voice input coming soon"
+        >
           <Mic className="w-4 h-4" />
         </button>
 
-        {/* Send Button */}
+        {/* Send */}
         <button
+          type="button"
           onClick={onSend}
-          className="p-2.5 bg-[#00E5FF] hover:bg-[#33ECFF] text-black rounded-lg transition-colors"
+          disabled={
+            !prompt.trim() || isTyping
+          }
+          className="p-2.5 bg-[#00E5FF] hover:bg-[#33ECFF] disabled:opacity-40 disabled:cursor-not-allowed text-black rounded-lg transition-colors"
+          aria-label="Send message"
+          title="Send"
         >
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 
       <p className="text-[10px] text-slate-600 text-center mt-3">
-        Aureum AI can make mistakes. Verify critical document data.
+        Aureum AI can make mistakes. Verify
+        critical document data.
       </p>
     </div>
   );
