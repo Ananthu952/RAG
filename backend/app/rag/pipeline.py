@@ -1,47 +1,84 @@
-from app.core.logger import app_logger
 from app.rag.chunker import Chunker
 from app.rag.embeddings import EmbeddingService
-from app.core.dependencies import vector_store
-from app.services.pdf_service import PDFService
+from app.rag.vector_store import VectorStore
 
 
 class RAGPipeline:
-    """
-    Handles document indexing.
-    """
 
-    def __init__(self):
-
+    def __init__(self, vector_store: VectorStore):
+        self.vector_store = vector_store
         self.chunker = Chunker()
         self.embedding_service = EmbeddingService()
-        self.vector_store = vector_store
 
     def index_document(
         self,
-        file_path: str,
         document_id: int,
-    ):
+        pages: list[dict],
+    ) -> list[dict]:
+        """
+        Split extracted PDF pages into chunks,
+        generate embeddings, and store them
+        in the document-specific FAISS index.
+        """
 
-        # Extract pages
-        pages = PDFService.extract_text(file_path)
+        # --------------------------------------------------
+        # 1. Split pages into chunks
+        # --------------------------------------------------
 
-        # Split into chunks
         chunks = self.chunker.split_pages(pages)
 
-        # Generate embeddings
-        embeddings = self.embedding_service.encode(
-            [chunk["text"] for chunk in chunks]
-        )
+        if not chunks:
+            return []
 
-        # Store vectors, scoped to this document
+        # --------------------------------------------------
+        # 2. Remove empty chunks
+        # --------------------------------------------------
+
+        valid_chunks = [
+            chunk
+            for chunk in chunks
+            if chunk.get("text", "").strip()
+        ]
+
+        if not valid_chunks:
+            return []
+
+        # --------------------------------------------------
+        # 3. Prepare text for embeddings
+        # --------------------------------------------------
+
+        texts = [
+            chunk["text"].strip()
+            for chunk in valid_chunks
+        ]
+
+        if not texts:
+            return []
+
+        # --------------------------------------------------
+        # 4. Generate embeddings
+        # --------------------------------------------------
+
+        embeddings = self.embedding_service.encode(texts)
+
+        if embeddings is None:
+            return []
+
+        if len(embeddings) == 0:
+            return []
+
+        # --------------------------------------------------
+        # 5. Store embeddings
+        # --------------------------------------------------
+
         self.vector_store.add(
             document_id,
             embeddings,
-            chunks,
+            valid_chunks,
         )
 
-        app_logger.info(
-            f"{len(chunks)} chunks indexed for document_id={document_id}."
-        )
+        # --------------------------------------------------
+        # 6. Return chunks
+        # --------------------------------------------------
 
-        return chunks
+        return valid_chunks

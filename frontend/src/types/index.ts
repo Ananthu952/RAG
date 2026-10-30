@@ -12,18 +12,14 @@ export interface Document {
   filename: string;
   fileSize: string;
   uploadedAt: string;
-
   status:
     | "uploading"
     | "processing"
     | "uploaded"
     | "indexed"
     | "failed";
-
   documentType: DocumentType;
-
   totalPages: number;
-
   progress?: number;
 }
 
@@ -51,8 +47,9 @@ export interface DashboardStats {
 }
 
 export interface Conversation {
-  id: string;
+  id: number;
   title: string;
   createdAt: string;
+  updatedAt: string;
   messages: ChatMessage[];
 }

@@ -2,15 +2,20 @@ from time import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.database.init_db import init_db
 from app.database.session import SessionLocal
+
 from app.api.routes.documents import router as document_router
+from app.api.routes.chat import router as chat_router
+from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.conversations import router as conversation_router
+from app.api.routes.study import router as study_router
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import app_logger
-from app.api.routes.chat import router as chat_router
-from app.api.routes.dashboard import router as dashboard_router
+
 from app.rag.index_loader import restore_vector_store
 
 
@@ -23,14 +28,28 @@ app = FastAPI(
 )
 
 
-# Register global exception handlers
+# --------------------------------------------------
+# Global exception handlers
+# --------------------------------------------------
+
 register_exception_handlers(app)
+
+
+# --------------------------------------------------
+# API Routers
+# --------------------------------------------------
 
 app.include_router(document_router)
 app.include_router(chat_router)
 app.include_router(dashboard_router)
+app.include_router(conversation_router)
+app.include_router(study_router)
 
-# Enable CORS
+
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Restrict this in production
@@ -40,37 +59,58 @@ app.add_middleware(
 )
 
 
-# Logging middleware
+# --------------------------------------------------
+# Request logging middleware
+# --------------------------------------------------
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time()
 
-    app_logger.info(f"Request Started: {request.method} {request.url.path}")
+    app_logger.info(
+        f"Request Started: {request.method} {request.url.path}"
+    )
 
     response = await call_next(request)
 
     process_time = time() - start_time
 
     app_logger.info(
-        f"Request Completed: {request.method} {request.url.path} "
-        f"Status={response.status_code} Time={process_time:.3f}s"
+        f"Request Completed: "
+        f"{request.method} {request.url.path} "
+        f"Status={response.status_code} "
+        f"Time={process_time:.3f}s"
     )
 
     return response
 
+
+# --------------------------------------------------
+# Application startup
+# --------------------------------------------------
+
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    app_logger.info("Database initialized successfully.")
 
-    # Rebuild the in-memory FAISS vector store from whatever was
-    # already indexed and persisted to disk/DB in a previous run, so
-    # previously uploaded documents remain queryable after a restart.
+    app_logger.info(
+        "Database initialized successfully."
+    )
+
+    # Restore previously indexed FAISS data
+    # so uploaded documents remain queryable
+    # after restarting the application.
     db = SessionLocal()
+
     try:
         restore_vector_store(db)
     finally:
         db.close()
+
+
+# --------------------------------------------------
+# Root endpoint
+# --------------------------------------------------
 
 @app.get("/")
 async def root():
@@ -80,6 +120,10 @@ async def root():
         "status": "running",
     }
 
+
+# --------------------------------------------------
+# Health endpoint
+# --------------------------------------------------
 
 @app.get("/health")
 async def health():

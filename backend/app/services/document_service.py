@@ -25,7 +25,7 @@ class DocumentService:
         """
 
         # --------------------------------------------------
-        # 1. Validate file type
+        # 1. Validate file
         # --------------------------------------------------
 
         if not file.filename:
@@ -45,6 +45,7 @@ class DocumentService:
         # --------------------------------------------------
 
         upload_dir = Path(settings.UPLOAD_DIR)
+
         upload_dir.mkdir(
             parents=True,
             exist_ok=True,
@@ -73,12 +74,21 @@ class DocumentService:
         # 5. Save PDF
         # --------------------------------------------------
 
-        with open(file_path, "wb") as pdf_file:
-            pdf_file.write(content)
+        try:
+            with open(file_path, "wb") as pdf_file:
+                pdf_file.write(content)
+
+        except OSError as exc:
+            app_logger.exception(exc)
+
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to save the uploaded PDF.",
+            )
 
         try:
             # --------------------------------------------------
-            # 6. Read PDF metadata/text
+            # 6. Extract PDF metadata and text
             # --------------------------------------------------
 
             page_count = PDFService.get_page_count(
@@ -103,7 +113,20 @@ class DocumentService:
             )
 
             # --------------------------------------------------
-            # 8. Create database document
+            # 8. Reject PDFs without extractable text
+            # --------------------------------------------------
+
+            if document_type == "empty":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "The uploaded PDF contains no extractable "
+                        "text. It may be scanned or image-based."
+                    ),
+                )
+
+            # --------------------------------------------------
+            # 9. Create database document
             # --------------------------------------------------
 
             document = Document(
@@ -120,18 +143,37 @@ class DocumentService:
             db.refresh(document)
 
             # --------------------------------------------------
-            # 9. Index document using existing RAG pipeline
+            # 10. Index document
             # --------------------------------------------------
 
-            pipeline = RAGPipeline()
+            pipeline = RAGPipeline(
+                vector_store
+            )
 
             chunks = pipeline.index_document(
-                str(file_path),
                 document_id=document.id,
+                pages=pages,
             )
 
             # --------------------------------------------------
-            # 10. Persist chunks
+            # 11. Make sure chunks were created
+            # --------------------------------------------------
+
+            if not chunks:
+                document.status = "failed"
+
+                db.commit()
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "The PDF could not be indexed because "
+                        "no usable text chunks were created."
+                    ),
+                )
+
+            # --------------------------------------------------
+            # 12. Persist chunks
             # --------------------------------------------------
 
             for chunk in chunks:
@@ -147,10 +189,12 @@ class DocumentService:
             db.commit()
 
             # --------------------------------------------------
-            # 11. Persist FAISS index
+            # 13. Save FAISS index
             # --------------------------------------------------
 
-            vector_dir = Path(settings.VECTOR_DB_DIR)
+            vector_dir = Path(
+                settings.VECTOR_DB_DIR
+            )
 
             vector_dir.mkdir(
                 parents=True,
@@ -160,13 +204,13 @@ class DocumentService:
             vector_store.save(
                 document.id,
                 str(
-                    vector_dir /
-                    f"{document.id}.index"
+                    vector_dir
+                    / f"{document.id}.index"
                 ),
             )
 
             # --------------------------------------------------
-            # 12. Mark document indexed
+            # 14. Mark document as indexed
             # --------------------------------------------------
 
             document.status = "indexed"
@@ -188,13 +232,35 @@ class DocumentService:
         except Exception as exc:
             app_logger.exception(exc)
 
-            # If the document record was created,
-            # mark it as failed.
+            # --------------------------------------------------
+            # Mark document as failed
+            # --------------------------------------------------
+
             if "document" in locals():
-                document.status = "failed"
-                db.commit()
+
+                try:
+                    document.status = "failed"
+                    db.commit()
+
+                except Exception as db_exc:
+                    app_logger.exception(db_exc)
+
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             raise HTTPException(
                 status_code=500,
                 detail="Failed to process the uploaded document.",
             )
+
+        finally:
+            # --------------------------------------------------
+            # Close uploaded file
+            # --------------------------------------------------
+
+            try:
+                await file.close()
+            except Exception:
+                pass
