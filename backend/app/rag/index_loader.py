@@ -64,7 +64,13 @@ def restore_vector_store(db: Session) -> None:
             for chunk in chunks
         ]
 
-        vector_store.load(document.id, str(index_path), metadata)
+        try:
+            vector_store.load(document.id, str(index_path), metadata)
+        except Exception as exc:
+            app_logger.warning(
+                f"Could not restore index for document {document.id}: {exc}"
+            )
+            continue
 
         restored_count += 1
 
