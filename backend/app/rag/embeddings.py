@@ -1,28 +1,24 @@
 
 import os
-from sentence_transformers import SentenceTransformer
+import numpy as np
 
 
 class EmbeddingService:
     """
-    Supports:
-    - MiniLM for local development
-    - Gemini embeddings for cloud deployment
+    Supports MiniLM locally and Gemini in production.
     """
 
     _model = None
 
     def __init__(self):
         self.provider = os.getenv(
-            "EMBEDDING_PROVIDER",
-            "minilm"
+            "EMBEDDING_PROVIDER", "minilm"
         ).lower()
 
         if self.provider == "gemini":
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
             api_key = os.getenv("GEMINI_API_KEY")
-
             if not api_key:
                 raise ValueError("GEMINI_API_KEY is not configured")
 
@@ -33,6 +29,8 @@ class EmbeddingService:
             )
 
         elif self.provider == "minilm":
+            from sentence_transformers import SentenceTransformer
+
             if EmbeddingService._model is None:
                 EmbeddingService._model = SentenceTransformer(
                     "sentence-transformers/all-MiniLM-L6-v2"
@@ -48,10 +46,7 @@ class EmbeddingService:
     def encode(self, texts):
         if self.provider == "gemini":
             embeddings = self.model.embed_documents(texts)
-            return __import__("numpy").asarray(
-                embeddings,
-                dtype="float32"
-            )
+            return np.asarray(embeddings, dtype="float32")
 
         return self.model.encode(
             texts,
