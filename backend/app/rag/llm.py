@@ -1,6 +1,5 @@
 
 import os
-
 from langchain_ollama import ChatOllama
 
 
@@ -27,11 +26,14 @@ class LLMService:
                 google_api_key=api_key,
             )
 
-        else:
+        elif provider == "ollama":
             self.llm = ChatOllama(
                 model="llama3.2:1b",
                 temperature=0.2,
             )
+
+        else:
+            raise ValueError(f"Unsupported LLM provider: {provider}")
 
     def generate(self, prompt: str) -> str:
         response = self.llm.invoke(prompt)
