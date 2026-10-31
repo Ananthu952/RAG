@@ -4,7 +4,7 @@ alembic==1.18.5
 fastapi==0.139.0
 faiss-cpu==1.14.3
 langchain==1.3.13
-langchain-core==1.4.9
+langchain-core==1.6.1
 langchain-ollama==1.1.0
 langchain-google-genai==4.4.0
 langchain-text-splitters==1.1.2
